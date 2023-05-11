@@ -320,6 +320,38 @@ struct AttentionAttrs : public tvm::AttrsNode<AttentionAttrs> {
   }
 };  // struct AttentionAttrs
 
+/*! \brief Attributes used for the padding operator */
+struct PadAttrs : public tvm::AttrsNode<PadAttrs> {
+  Array<Array<Integer>> pad_width;
+  tvm::String pad_mode;
+
+  TVM_DECLARE_ATTRS(PadAttrs, "relay.attrs.PadAttrs") {
+    TVM_ATTR_FIELD(pad_width).describe(
+        "Number of values padded to the edges of each axis, "
+        "in the format of ((before_1, after_1), ..., (before_N, after_N))");
+    TVM_ATTR_FIELD(pad_mode)
+        .set_default("constant")
+        .describe(
+            "Padding type to use. \"constant\" pads with constant_value, "
+            "\"edge\" pads using the edge values of the input array, "
+            "\"reflect\" pads by reflecting values with respect to the edges.");
+  }
+};
+
+/*! \brief Attributes used for the MirrorPadding operator */
+struct MirrorPadAttrs : public tvm::AttrsNode<MirrorPadAttrs> {
+  std::string mode;
+  Array<Array<PrimExpr>> pad_width;
+
+  TVM_DECLARE_ATTRS(MirrorPadAttrs, "relay.attrs.MirrorPadAttrs") {
+    TVM_ATTR_FIELD(mode)
+        .set_default("SYMMETRIC")
+        .describe("Specifies how mirroring should be performed.");
+    TVM_ATTR_FIELD(pad_width).describe(
+        "Number of values padded to the edges of each axis, "
+        "in the format of ((before_1, after_1), ..., (before_N, after_N))");
+  }
+};
 }  // namespace relax
 }  // namespace tvm
 

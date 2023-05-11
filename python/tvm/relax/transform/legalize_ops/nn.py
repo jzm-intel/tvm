@@ -397,3 +397,9 @@ def _nn_nll_loss(bb: BlockBuilder, call: Call) -> Expr:
         reduction=call.attrs.reduction,
         ignore_index=call.attrs.ignore_index,
     )
+
+@register_legalize("relax.nn.pad")
+def _pad(bb: BlockBuilder, call: Call) -> Expr:
+    assert call.attrs.pad_mode == "constant"
+    # return bb.call_te(topi.nn.pad, call.args[0], [x[0] for x in call.attrs.pad_width], [x[1] for x in call.attrs.pad_width], call.args[1])
+    return bb.call_te(topi.nn.pad, call.args[0], [x[0] for x in call.attrs.pad_width], [x[1] for x in call.attrs.pad_width], tir.const(call.args[1].data.numpy()[()]))

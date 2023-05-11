@@ -937,7 +937,7 @@ TVM_REGISTER_GLOBAL("node._const").set_body([](TVMArgs args, TVMRetValue* ret) {
   } else if (args[0].type_code() == kDLFloat) {
     *ret = tir::make_const(args[1], args[0].operator double(), args[2]);
   } else {
-    LOG(FATAL) << "only accept int or float";  // FIXME
+    LOG(FATAL) << "Constant must be int or float but got " << tvm::runtime::ArgTypeCode2Str(args[0].type_code());  // FIXME
   }
 });
 

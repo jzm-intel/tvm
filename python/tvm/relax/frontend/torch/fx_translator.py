@@ -194,6 +194,10 @@ class TorchFXImporter:
         lhs, rhs = self.retrieve_args(node)
         if isinstance(lhs, relax.Var) or isinstance(rhs, relax.Var):
             return self._call_binary_op(relax.op.multiply, lhs, rhs)
+        if isinstance(rhs, (int, float)):
+            rhs = relax.const(rhs)
+        if isinstance(lhs, (int, float)):
+            lhs = relax.const(lhs)
         return lhs * rhs
 
     def _pow(self, node: fx.node.Node) -> relax.Expr:
@@ -417,6 +421,18 @@ class TorchFXImporter:
     def _half(self, node: fx.node.Node) -> relax.Var:
         return self.block_builder.emit(relax.op.astype(self.env[node.args[0]], "float16"))
 
+    def _long(self, node: fx.node.Node) -> relax.Var:
+        return self.block_builder.emit(relax.op.astype(self.env[node.args[0]], "int64"))
+
+    def _int(self, node: fx.node.Node) -> relax.Var:
+        return self.block_builder.emit(relax.op.astype(self.env[node.args[0]], "int32"))
+
+    def _short(self, node: fx.node.Node) -> relax.Var:
+        return self.block_builder.emit(relax.op.astype(self.env[node.args[0]], "int16"))
+
+    def _int8(self, node: fx.node.Node) -> relax.Var:
+        return self.block_builder.emit(relax.op.astype(self.env[node.args[0]], "int8"))
+
     def _type(self, node: fx.node.Node) -> relax.Var:
         x = self.env[node.args[0]]
         dtype = TorchFXImporter._convert_data_type(node.args[1], self.env)
@@ -575,6 +591,10 @@ class TorchFXImporter:
             raise ValueError("specifying out for cumsum is not supported yet")
 
         return self.block_builder.emit(relax.op.cumsum(x, dim, dtype))
+
+    def _einsum(self, node: fx.node.Node) -> relax.Var:
+        operands = [self.env[x] for x in node.args[1:]]
+        return self.block_builder.emit(relax.op.einsum(operands, node.args[0]))
 
     def _index_select(self, node: fx.node.Node) -> relax.Var:
         x = self.env[node.args[0]]
@@ -1002,6 +1022,60 @@ class TorchFXImporter:
             )
         )
 
+    def _pad_common(self, mode, pad_value, inputs):
+        data = self.env[inputs[0]]
+        pad_list = inputs[1]
+
+        # initialize paddings based on input len
+        pad_len = len(data.struct_info.shape) * 2
+        paddings = [0] * pad_len
+
+        if len(pad_list) >= 2:
+            paddings[-1] = pad_list[1]
+            paddings[-2] = pad_list[0]
+        if len(pad_list) >= 4:
+            paddings[-3] = pad_list[3]
+            paddings[-4] = pad_list[2]
+        if len(pad_list) >= 6:
+            paddings[-5] = pad_list[5]
+            paddings[-6] = pad_list[4]
+
+        # group into tuple of 2 ints
+        paddings = [paddings[i : i + 2] for i in range(0, len(paddings), 2)]
+
+        if mode == "constant":
+            return self.block_builder.emit(relax.op.nn.pad(data, paddings, pad_value=relax.const(pad_value), pad_mode=mode))
+        else:
+            return self.block_builder.emit(relax.op.nn.pad(data, paddings, pad_mode=mode))
+
+    def _pad(self, node: fx.node.Node) -> relax.Expr:
+        if len(node.args) > 2 and node.args[2] is not None:
+            mode = node.args[2]
+        else:
+            mode = 'constant'
+
+        if len(node.args) == 4 and node.args[3] is not None:
+            pad_value = node.args[3]
+        else:
+            pad_value = 0
+        return self._pad_common(mode, pad_value, node.args)
+
+    def _unbind(self, node: fx.node.Node) -> relax.Expr:
+        data = self.env[node.args[0]]
+        shape = data.struct_info.shape
+        if len(node.args) == 2 and node.args[1] is not None:
+            axis = node.args[1]
+        else:
+            axis = 0
+
+        selections = shape[axis]
+        res_split = relax.op.split(data, selections, axis)
+        ret = []
+        for i in range(selections.value):
+            ret.append(relax.op.squeeze(res_split[i], axis=[axis]))
+        return self.block_builder.emit(relax.expr.Tuple(ret))
+
+
     ########## Others ##########
 
     def _size(self, node: fx.node.Node) -> relax.Expr:
@@ -1023,6 +1097,8 @@ class TorchFXImporter:
         return getattr(self.env[node.args[0]], node.args[1])
 
     def _getitem(self, node: fx.node.Node) -> relax.Var:
+        from torch import fx
+
         x = self.env[node.args[0]]
         if isinstance(x, (list, tuple, relax.ShapeExpr, relax.Tuple)):
             return x[node.args[1]]
@@ -1078,10 +1154,15 @@ class TorchFXImporter:
                 sliced_shape.insert(i, 1)
             return self.block_builder.emit(relax.op.reshape(sliced, sliced_shape))
         elif isinstance(x, relax.Constant):
-            dtype = x.struct_info.dtype
-            return relax.const(x.data.numpy()[node.args[1]], dtype)
+            if isinstance(node.args[1], fx.node.Node):
+                idx = self.env[node.args[1]]
+                return self.block_builder.emit(relax.op.take(x,idx,axis=0))
+            else:
+                dtype = x.struct_info.dtype
+                return relax.const(x.data.numpy()[node.args[1]], dtype)
         else:
-            assert False
+            import IPython;IPython.embed()
+            raise ValueError(f"Unsupported type {type(x)} for _getitem, should be list, tuple, ShapeExpr, Tuple, Var, or Constant")
 
     def create_convert_map(self):
         from torch import nn
@@ -1101,6 +1182,7 @@ class TorchFXImporter:
                 relax.op.clip(self.env[node.args[0]], 0, 6)
             ),
             nn.SiLU: lambda node: self.block_builder.emit(relax.op.nn.silu(self.env[node.args[0]])),
+            nn.GELU: lambda node: self.block_builder.emit(relax.op.nn.gelu(self.env[node.args[0]])),
             nn.Flatten: self._flatten,
             nn.BatchNorm2d: self._batch_norm_2d,
             nn.LayerNorm: self._layer_norm,
@@ -1137,6 +1219,13 @@ class TorchFXImporter:
             "sum": self._sum,
             "float": self._float,
             "half": self._half,
+            "long": self._long,
+            "int64": self._long,
+            "int": self._int,
+            "int32": self._int,
+            "short": self._short,
+            "int16": self._short,
+            "int8": self._int8,
             "type": self._type,
             "astype": self._type,
             "matmul": self._matmul,
@@ -1185,6 +1274,9 @@ class TorchFXImporter:
             "neg": self._neg,
             "max": self._max,
             "cross_entropy": self._cross_entropy,
+            "pad": self._pad,
+            "unbind": self._unbind,
+            "einsum": self._einsum,
         }
 
     def from_fx(

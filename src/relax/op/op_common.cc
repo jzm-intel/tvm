@@ -29,7 +29,7 @@ Array<TensorStructInfo> GetInputTensorStructInfo(const Call& call, const BlockBu
   int n_input = op->arguments.size();
   if (static_cast<int>(call->args.size()) != n_input) {
     ctx->ReportFatal(Diagnostic::Error(call)
-                     << op << " op should have " << n_input << " arguments");
+                     << op << " op should have " << n_input << " arguments" << " but it got " << call->args.size());
   }
   Array<TensorStructInfo> input_tensor_sinfo;
   input_tensor_sinfo.reserve(n_input);
