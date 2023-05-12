@@ -652,7 +652,7 @@ def const(
         value = _nd.array(value)
 
     if not isinstance(value, _nd.NDArray):
-        raise ValueError("value has to be scalar or NDArray")
+        raise ValueError(f"value has to be scalar or NDArray but it is {type(value)}")
 
     return Constant(value)
 

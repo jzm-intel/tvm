@@ -56,6 +56,14 @@ struct StridedSliceAttrs : public tvm::AttrsNode<StridedSliceAttrs> {
   }
 };  // struct StridedSliceAttrs
 
+/*! \brief Attributes used in strided_slice operator */
+struct DataDependentStridedSliceAttrs : public tvm::AttrsNode<DataDependentStridedSliceAttrs> {
+  Array<Integer> axes;
+  TVM_DECLARE_ATTRS(DataDependentStridedSliceAttrs, "relax.attrs.DataDependentStridedSliceAttrs") {
+    TVM_ATTR_FIELD(axes).describe("Axes along which slicing is applied.");
+  }
+};
+
 }  // namespace relax
 }  // namespace tvm
 

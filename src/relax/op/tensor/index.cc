@@ -312,6 +312,5 @@ TVM_REGISTER_OP("relax.dynamic_strided_slice")
     .add_argument("end", "Tensor", "Indices indicating end of the slice.")
     .add_argument("strides", "Tensor", "The stride values.")
     .set_attr<FInferStructInfo>("FInferStructInfo", InferStructInfoDynStridedSlice);
-
 }  // namespace relax
 }  // namespace tvm
