@@ -18,7 +18,7 @@
 # pylint: disable=invalid-name, inconsistent-return-statements, unidiomatic-typecheck
 # pylint: disable=import-outside-toplevel
 """PyTorch FX frontend of Relax."""
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union, Sequence
 from functools import reduce
 
 import tvm
@@ -122,6 +122,17 @@ def _convert_data_type(input_type, default_dtype=None):
     else:
         raise NotImplementedError("input_type {} is not handled yet".format(input_type))
     return "float32"  # Never reached
+
+def _constify_array(ary: Sequence[Union[int, tvm.tir.IntImm, relax.Var]]) -> relax.Expr:
+    const = []
+    for i in ary:
+        if isinstance(i, int):
+            const.append(relax.const(tvm.nd.array([i])))
+        elif isinstance(i, tvm.tir.IntImm):
+            const.append(relax.const(tvm.nd.array([i.value])))
+        else:
+            const.append(i)
+    return relax.op.concat(const)
 
 class TorchFXImporter:
     """An importer from PyTorch FX to Relax."""
@@ -1141,6 +1152,11 @@ class TorchFXImporter:
             assert isinstance(shape, relax.ShapeExpr)
             size = tuple(int(shape[i].value * scale_factor) for i in range(2, len(shape)))
 
+        from torch import fx
+        if any([isinstance(s, fx.node.Node) for s in size]):
+            size = relax.op.concat([self.env[s] for s in size])
+            # import IPython; IPython.embed()
+
         if method.startswith("nearest"):
             method = "nearest_neighbor"
         elif method[0:2] == "bi":
@@ -1326,13 +1342,14 @@ class TorchFXImporter:
                 stride.append(1)
                 axes.append(i)
                 i += 1
-            print([type(x) for x in axes], [type(x) for x in begin], [type(x) for x in end], [type(x) for x in stride])
-            if any([isinstance(x, relax.Var) for x in begin]) or any([isinstance(x, relax.Var) for x in end]):
-                print(end)
-                sliced = self.block_builder.emit(relax.op.data_dependent_strided_slice(x, axes, begin, relax.const(np.array(end, dtype=int))))
+            # Handle case where slice is data dependent
+            if any([isinstance(y, relax.Var) for y in begin]) or any([isinstance(y, relax.Var) for y in end]) or any([isinstance(y, relax.Var) for y in stride]):
+                assert len(axes) == len(x.struct_info.shape), f"Dynamic strided slice must be provided with all the axes ({len(x.struct_info.shape)}) of the sliced tensor ({len(axes)} provided)"
+                sliced = self.block_builder.emit(relax.op.dynamic_strided_slice(x, _constify_array(begin), _constify_array(end), _constify_array(stride)))
+                sliced_shape = list(self.shape_of(x))
             else:
                 sliced = self.block_builder.emit(relax.op.strided_slice(x, axes, begin, end, stride))
-            sliced_shape = list(self.shape_of(sliced))
+                sliced_shape = list(self.shape_of(sliced))
             for i in expand_dim:
                 sliced_shape.insert(i, 1)
             return self.block_builder.emit(relax.op.reshape(sliced, sliced_shape))
