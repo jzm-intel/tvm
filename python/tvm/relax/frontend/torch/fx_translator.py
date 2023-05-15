@@ -1327,7 +1327,11 @@ class TorchFXImporter:
                 axes.append(i)
                 i += 1
             print([type(x) for x in axes], [type(x) for x in begin], [type(x) for x in end], [type(x) for x in stride])
-            sliced = self.block_builder.emit(relax.op.strided_slice(x, axes, begin, end, stride))
+            if any([isinstance(x, relax.Var) for x in begin]) or any([isinstance(x, relax.Var) for x in end]):
+                print(end)
+                sliced = self.block_builder.emit(relax.op.data_dependent_strided_slice(x, axes, begin, relax.const(np.array(end, dtype=int))))
+            else:
+                sliced = self.block_builder.emit(relax.op.strided_slice(x, axes, begin, end, stride))
             sliced_shape = list(self.shape_of(sliced))
             for i in expand_dim:
                 sliced_shape.insert(i, 1)

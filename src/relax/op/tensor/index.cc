@@ -239,6 +239,7 @@ TVM_REGISTER_OP("relax.strided_slice")
     .set_attr<FRelaxInferLayout>("FRelaxInferLayout", InferLayoutStridedSlice)
     .set_attr<TMixedPrecisionPolicy>("TMixedPrecisionPolicy", MixedPrecisionPolicyKind::kFollow);
 
+<<<<<<< HEAD
 /* relax.dynamic_strided_slice */
 Expr dynamic_strided_slice(Expr x,      //
                            Expr begin,  //
@@ -246,6 +247,37 @@ Expr dynamic_strided_slice(Expr x,      //
                            Expr strides) {
   static const Op& op = Op::Get("relax.dynamic_strided_slice");
   return Call(op, {std::move(x), std::move(begin), std::move(end), std::move(strides)}, {});
+||||||| parent of f322af441 (trying data dependent dynamic slice)
+/* relax.data_dependent_strided_slice */
+// TODO: support dynamic number of axes
+TVM_REGISTER_NODE_TYPE(DataDependentStridedSliceAttrs);
+
+Expr data_dependent_strided_slice(Expr x,                 //
+                   Array<Integer> axes,    //
+                   Expr begin,  //
+                   Expr end)    {
+  int n_axis = axes.size();
+
+  ObjectPtr<DataDependentStridedSliceAttrs> attrs = make_object<DataDependentStridedSliceAttrs>();
+  attrs->axes = std::move(axes);
+
+  static const Op& op = Op::Get("relax.data_dependent_strided_slice");
+  return Call(op, {std::move(x), std::move(begin), std::move(end)}, Attrs(attrs), {});
+=======
+/* relax.data_dependent_strided_slice */
+// TODO: support dynamic number of axes
+TVM_REGISTER_NODE_TYPE(DataDependentStridedSliceAttrs);
+
+Expr data_dependent_strided_slice(Expr x,                 //
+                   Array<Integer> axes,    //
+                   Expr begin,  //
+                   Expr end)    {
+  ObjectPtr<DataDependentStridedSliceAttrs> attrs = make_object<DataDependentStridedSliceAttrs>();
+  attrs->axes = std::move(axes);
+
+  static const Op& op = Op::Get("relax.data_dependent_strided_slice");
+  return Call(op, {std::move(x), std::move(begin), std::move(end)}, Attrs(attrs), {});
+>>>>>>> f322af441 (trying data dependent dynamic slice)
 }
 
 TVM_REGISTER_GLOBAL("relax.op.dynamic_strided_slice").set_body_typed(dynamic_strided_slice);
