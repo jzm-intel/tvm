@@ -376,6 +376,18 @@ class TorchFXImporter:
         lhs, rhs = self.retrieve_args(node)
         return self._call_binary_op(relax.op.less, lhs, rhs)
 
+    def _le(self, node: fx.node.Node) -> relax.Expr:
+        lhs, rhs = self.retrieve_args(node)
+        return self._call_binary_op(relax.op.less_equal, lhs, rhs)
+
+    def _gt(self, node: fx.node.Node) -> relax.Expr:
+        lhs, rhs = self.retrieve_args(node)
+        return self._call_binary_op(relax.op.greater, lhs, rhs)
+
+    def _ge(self, node: fx.node.Node) -> relax.Expr:
+        lhs, rhs = self.retrieve_args(node)
+        return self._call_binary_op(relax.op.greater_equal, lhs, rhs)
+
     def _eq(self, node: fx.node.Node) -> relax.Expr:
         lhs, rhs = self.retrieve_args(node)
         return self._call_binary_op(relax.op.equal, lhs, rhs)
@@ -1154,8 +1166,8 @@ class TorchFXImporter:
 
         from torch import fx
         if any([isinstance(s, fx.node.Node) for s in size]):
-            size = relax.op.concat([self.env[s] for s in size])
-            # import IPython; IPython.embed()
+            size = relax.op.tensor_to_shape(relax.op.concat([self.env[s] for s in size]))
+            print(type(size))
 
         if method.startswith("nearest"):
             method = "nearest_neighbor"
@@ -1406,6 +1418,9 @@ class TorchFXImporter:
             "sqrt": self._sqrt,
             "round": self._round,
             "lt": self._lt,
+            "le": self._le,
+            "gt": self._gt,
+            "ge": self._ge,
             "eq": self._eq,
             "ne": self._ne,
             "truediv": self._truediv,

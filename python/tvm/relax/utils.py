@@ -368,7 +368,7 @@ def gen_call_tir_inputs(
                 if isinstance(arg.struct_info, ShapeStructInfo):
                     assert isinstance(
                         arg, ShapeExpr
-                    ), "For Expr having ShapeStructInfo, emit_te now only supports ShapeExpr"
+                    ), f"For Expr having ShapeStructInfo, emit_te now only supports ShapeExpr (got {type(arg)}). You may need to run tvm.relax.transform.DecomposeOpsForInference first."
                     return [_convert_te_arg_helper(val) for val in arg.values]
                 if isinstance(arg.struct_info, PrimStructInfo):
                     return arg.value

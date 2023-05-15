@@ -60,7 +60,7 @@ te::Tensor TETensor(Expr value, Map<tir::Var, PrimExpr> tir_var_map, std::string
   }
   ICHECK(value->struct_info_.defined()) << "value must be normalized and contain StructInfo";
   auto* tensor_sinfo = GetStructInfoAs<TensorStructInfoNode>(value);
-  ICHECK(tensor_sinfo) << "Value must be a tensor";
+  ICHECK(tensor_sinfo) << "Value must be a tensor but it is a " << value->GetTypeKey();
   auto* shape_expr = tensor_sinfo->shape.as<ShapeExprNode>();
   CHECK(shape_expr)
       << "ValueError: Expression does not have an known symbolic shape, please consider use "

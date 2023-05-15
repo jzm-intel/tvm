@@ -69,6 +69,13 @@ struct TResult {
     return *this;
   }
 
+  TResult SetInvalid() {
+    for (auto& kv : data_) {
+      kv.second = -1;
+    }
+    return *this;
+  }
+
   TResult MaxWith(const TResult& rhs) {
     for (const auto& kv : rhs.data_) {
       double& v = data_[kv.first];
@@ -140,9 +147,11 @@ class FlopEstimator : private ExprFunctor<TResult(const PrimExpr& n)>,
   TResult VisitStmt_(const ForNode* loop) override {
     TResult result = VisitStmt(loop->body);
     const auto* int_imm = loop->extent.as<IntImmNode>();
-    ICHECK(int_imm) << "TypeError: Expect the extent of a loop to be IntImm, but gets: "
-                    << loop->extent->GetTypeKey();
-    result *= int_imm->value;
+    if(int_imm == nullptr) {
+      result.SetInvalid();
+    } else {
+      result *= int_imm->value;
+    }
     return result;
   }
 
